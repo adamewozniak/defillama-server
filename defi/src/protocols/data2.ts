@@ -21003,7 +21003,7 @@ const data2: Protocol[] = [
   {
     id: "2287",
     name: "ThorChain DEX",
-    address: null, 
+    address: null,
     symbol: "RUNE",
     url: "https://thorchain.org/",
     description:
@@ -25864,7 +25864,7 @@ const data2: Protocol[] = [
     chains: ["Umee"],
     module: "umee/index.js",
     twitter: "Umee_CrossChain",
-    oracles: ["Ojo Oracle"],
+    oracles: ["Ojo Network"],
     forkedFrom: [],
     audit_links: ["https://umeeversity.umee.cc/overview/umee-overview/security-audits.html"],
     listedAt: 1675684784,

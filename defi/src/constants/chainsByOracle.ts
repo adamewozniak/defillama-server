@@ -140,7 +140,7 @@ const chainsByOracle = {
   ],
   "Switchboard": ["Solana", "Ethereum", "CORE", "Arbitrum", "Optimism", "Base", "Aurora", "Aptos", "Sui"],
   "RedStone": [
-    "Ethereum", 
+    "Ethereum",
     "Arbitrum",
     "Optimism",
     "Blast",
@@ -327,7 +327,7 @@ const chainsByOracle = {
     "Polygon",
     "Aeternity",
   ],
-  "Ojo Oracle": ["Archway", "Comdex", "Injective", "Juno", "Neutron", "Osmosis", "Secret", "Stargaze"],
+  "Ojo Network": ["Ethereum", "Arbitrum", "Archway", "Comdex", "Injective", "Juno", "Neutron", "Osmosis", "Secret", "Stargaze"],
   "Pragma": ["Starknet"],
   "Harbinger": ["Tezos"],
   "SEDA": ["Aurora", "Evmos", "Optimism"],
