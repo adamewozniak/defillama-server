@@ -4,6 +4,7 @@ import * as uniswap from "./markets/uniswap";
 import * as curve from "./markets/curve";
 import * as balancer from "./markets/balancer";
 import * as others from "./other/index";
+import * as others2 from "./other/others2";
 
 export default {
   ...compound.adapters,
@@ -12,7 +13,12 @@ export default {
   ...curve.adapters,
   ...balancer.adapters,
   ...others.adapters,
+  ...others2.adapters,
+  reservoirprotocol: require("./rwa/reservoir-protocol"),
+  fortunafi: require("./rwa/fortunafi"),
+  midas: require("./rwa/midas"),
   stobox: require("./rwa/stobox"),
+  alex: require("./markets/alex"),
   seamless: require("./other/seamless"),
   pyth: require("./oracles/pyth"),
   unknownTokensV3: require("./other/unknownTokensV3"),
@@ -59,6 +65,7 @@ export default {
   tezos: require("./tezos"),
   aaveDebt: require("./moneyMarkets/aave-debt"),
   saber: require("./solana/saber"),
+  solend: require("./solana/solend"),
   reservoir: require("./nft/reservoir"),
   jpegd: require("./yield/jpegd"),
   glpDerivs: require("./yield/glpDerivs"),
@@ -66,6 +73,7 @@ export default {
   penpie: require("./yield/pendle"),
   phux: require("./markets/phux"),
   wombat: require("./markets/wombat"),
+  wombatWrapped: require("./markets/wombat"),
   backed: require("./rwa/backed"),
   vela: require("./yield/vela"),
   chai: require("./yield/chai"),
@@ -77,6 +85,7 @@ export default {
   maverick: require("./markets/maverick"),
   steer: require("./markets/steer"),
   derivs: require("./yield/derivs"),
+  apiDerivs: require("./yield/apiDerivs"),
   pxeth: require("./liquidStaking/pxeth"),
   // sthApt: require("./liquidStaking/sthapt"),
   mod: require("./markets/thala"),
@@ -87,4 +96,15 @@ export default {
   warlord: require("./other"),
   ifil: require("./liquidStaking/ifil"),
   uniV3: require("./markets/uniswap/v3"),
+  liquity: require("./other/liquity"),
+  fxProtocol: require("./yield/fx-protocol"),
+  crosscurve: require("./markets/crosscurve"),
+  samm: require("./markets/samm"),
+  gamma: require("./yield/gamma"),
+  thena: require("./markets/thena"),
+  pancakeStable: require("./markets/pancakeStable"),
+  etherfi: require("./yield/etherfi"),
+  wcgUSD: require("./other/wcgUSD"),
+  usdrif: require("./other/usdrif"),
+  xailocker: require("./liquidStaking/xailocker"),
 };

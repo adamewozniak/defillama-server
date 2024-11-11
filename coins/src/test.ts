@@ -40,14 +40,14 @@ async function main() {
   }
 
   const adapterFn = typeof protocolWrapper === 'function' ? protocolWrapper : protocolWrapper[protocol];
-  const results = await adapterFn(0);
+  const results = await adapterFn(0)
   const resultsWithoutDuplicates = await filterWritesWithLowConfidence(
     results.flat()
   );
 
   const lTable: any = []
   resultsWithoutDuplicates.forEach(i => {
-    lTable[i.PK] = { symbol: i.symbol, price: i.price, decimals: i.decimals, PK: i.PK }
+    lTable[i.PK] = { symbol: i.symbol, price: i.price ?? i.redirect, decimals: i.decimals, PK: i.PK }
   })
   /* console.log(`==== Example results ====`);
   const indexesToLog = selectRandom(resultsWithoutDuplicates.length);
@@ -62,8 +62,8 @@ async function main() {
     items = items.slice(0, 999);
   }
   logTable(items)
-  if (itemCount > 999)
-    console.log(`Too many items to log: ${itemCount}, showing random 999`);
+  if (itemCount > 99)
+    console.log(`Too many items to log: ${itemCount}, showing random 99`);
 
 }
 main();

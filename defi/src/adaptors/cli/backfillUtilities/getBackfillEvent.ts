@@ -3,7 +3,7 @@ import fs, { writeFileSync } from "fs"
 import path from "path"
 import loadAdaptorsData from "../../data"
 import { IJSON } from "../../data/types"
-import { Adapter } from "@defillama/dimension-adapters/adapters/types";
+import { Adapter, IStartTimestamp } from "@defillama/dimension-adapters/adapters/types";
 import { getAdaptorRecord, AdaptorRecordType, AdaptorRecord } from "../../db-utils/adaptor-record"
 import getDataPoints from "../../utils/getDataPoints"
 import { getUniqStartOfTodayTimestamp } from "@defillama/dimension-adapters/helpers/getUniSubgraphVolume"
@@ -31,6 +31,18 @@ const KEYS_TO_CHECK: TKeysToCheck = {
     [AdapterType.PROTOCOLS]: 'dv',
     [AdapterType.ROYALTIES]: 'dv',
     [AdapterType.AGGREGATOR_DERIVATIVES]: 'dv',
+}
+
+const getStartTime = async (start: string | number | undefined | IStartTimestamp, default_time: number) => {
+    if (start === undefined) { return default_time }
+    if (typeof start === 'function') {
+        const result = await start();
+        return result !== undefined ? result : default_time;
+    } else if (typeof start === 'string') {
+        return new Date(start).getTime() / 1000
+    } else {
+        return start
+    }
 }
 
 export default async (adapter: string[], adaptorType: AdapterType, cliArguments: ICliArgs) => {
@@ -111,7 +123,7 @@ export default async (adapter: string[], adaptorType: AdapterType, cliArguments:
                 const st = await Object.values(dexAdapter.adapter)
                     .reduce(async (accP, { start, runAtCurrTime }) => {
                         const acc = await accP;
-                        const currstart = runAtCurrTime ? nowSTimestamp + 2 : (typeof start === 'function' ? await start().catch(() => nowSTimestamp) : start);
+                        const currstart = runAtCurrTime ? nowSTimestamp + 2 : await getStartTime(start, nowSTimestamp).catch(() => nowSTimestamp);
                         return (currstart && currstart < acc && currstart !== 0) ? currstart : acc;
                     }, Promise.resolve(nowSTimestamp + 1));
                 startTimestamp = st;
@@ -120,7 +132,7 @@ export default async (adapter: string[], adaptorType: AdapterType, cliArguments:
                     const acc = await accP
                     const bst = await Object.values(dexAdapter).reduce(async (accP, { start, runAtCurrTime }) => {
                         const acc = await accP
-                        const currstart = runAtCurrTime ? nowSTimestamp + 2 : (typeof start === 'function' ? await start().catch(() => nowSTimestamp) : start)
+                        const currstart = runAtCurrTime ? nowSTimestamp + 2 : await getStartTime(start, nowSTimestamp).catch(() => nowSTimestamp);
                         return (typeof currstart === 'number' && currstart < acc && currstart !== 0) ? currstart : acc
                     }, Promise.resolve(nowSTimestamp + 1))
 
@@ -143,7 +155,7 @@ export default async (adapter: string[], adaptorType: AdapterType, cliArguments:
         const startDate = new Date(getUniqStartOfTodayTimestamp(new Date(startTimestamp)) * 1000)
         console.info("Starting timestamp", startTimestamp, "->", startDate)
         const endDate = new Date(nowSTimestamp * 1000)
-        const dates: Date[] = []
+        let dates: Date[] = []
         if (cliArguments.onlyMissing) {
             let volTimestamps = {} as IJSON<boolean>
             for (const type of [KEYS_TO_CHECK[adaptorType]]) {
@@ -177,6 +189,10 @@ export default async (adapter: string[], adaptorType: AdapterType, cliArguments:
                     dates.push(new Date(dayInMilis))
                     dayInMilis += DAY_IN_MILISECONDS
                 }
+        }
+        if(cliArguments.endTimestamp){
+            const end = new Date(cliArguments.endTimestamp*1e3)
+            dates = dates.filter(d=>d<end)
         }
         event = {
             type: adaptorType,

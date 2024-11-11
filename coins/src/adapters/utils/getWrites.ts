@@ -1,17 +1,22 @@
 import {
   addToDBWritesList,
-  getTokenAndRedirectData
+  getTokenAndRedirectDataMap
 } from "./database";
 import { getTokenInfo } from "./erc20";
 import { Write, CoinData } from "./dbInterfaces";
 
-export default async function getWrites(params: { chain: string, timestamp: number, pricesObject: Object, writes?: Write[], projectName: string, underlyingChain?: string}) {
-  let { chain, timestamp, pricesObject, writes = [], underlyingChain } = params
+function normalize(addr: string, chain?: string) {
+  if (!addr || ['solana'].includes(chain as any)) return addr
+  return addr.toLowerCase()
+}
+
+export default async function getWrites(params: { chain: string, timestamp: number, pricesObject: Object, writes?: Write[], projectName: string, underlyingChain?: string, confidence?: number}) {
+  let { chain, timestamp, pricesObject, writes = [], underlyingChain, confidence } = params
   const entries = Object.entries(pricesObject).map(([token, obj]) => {
     return {
-      token: token.toLowerCase(),
+      token: normalize(token, chain),
       price: obj.price,
-      underlying: obj.underlying?.toLowerCase(),
+      underlying: normalize(obj.underlying, chain),
       symbol: obj.symbol ?? undefined,
       decimals: obj.decimals ?? undefined,
     }
@@ -21,23 +26,21 @@ export default async function getWrites(params: { chain: string, timestamp: numb
     tokenInfos,
     coinsData
   ] = await Promise.all([
-    getTokenInfo(underlyingChain ?? chain, entries.map(i => i.token), undefined),
-    getTokenAndRedirectData(entries.map(i => i.underlying).filter(i => i), underlyingChain ?? chain, timestamp)
+    chain === 'solana' ? {} as any : getTokenInfo(underlyingChain ?? chain, entries.map(i => i.token), undefined),
+    getTokenAndRedirectDataMap(entries.map(i => i.underlying).filter(i => i), underlyingChain ?? chain, timestamp)
   ])
 
   entries.map(({token, price, underlying, symbol, decimals }, i) => {
     const finalSymbol = symbol ?? tokenInfos.symbols[i].output
     const finalDecimals = decimals ?? tokenInfos.decimals[i].output
-    let coinData: (CoinData | undefined) = coinsData.find(
-      (c: CoinData) => c.address.toLowerCase() === underlying
-    );
+    let coinData: (CoinData | undefined) = coinsData[underlying]
     if (!underlying) coinData = {
       price: 1,
       confidence: 0.98,
     } as CoinData;
     if (!coinData) return;
 
-    addToDBWritesList(writes, chain, token, coinData.price * price, finalDecimals, finalSymbol, timestamp, params.projectName, Math.min(0.98, coinData.confidence as number))
+    addToDBWritesList(writes, chain, token, coinData.price * price, finalDecimals, finalSymbol, timestamp, params.projectName, confidence ?? Math.min(0.98, coinData.confidence as number))
   })
 
   const writesObject: any = {}

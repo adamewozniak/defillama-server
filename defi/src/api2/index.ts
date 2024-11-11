@@ -1,15 +1,18 @@
+import './utils/failOnError'
 import * as HyperExpress from "hyper-express";
 import { initCache } from "./cache/index";
 import { initializeTVLCacheDB } from "./db";
 import setTvlRoutes from "./routes";
 import process from "process";
 import fs from 'fs'
+import { RUN_TYPE } from "./utils";
 
 const webserver = new HyperExpress.Server()
 
 const port = +(process.env.PORT ?? 5001)
+const skipSubPath = process.env.API2_SKIP_SUBPATH === 'true'
 
-if (!process.env.API2_SUBPATH) throw new Error('Missing API2_SUBPATH env var')
+if (!skipSubPath && !process.env.API2_SUBPATH) throw new Error('Missing API2_SUBPATH env var')
 
 async function main() {
   console.time('Api Server init')
@@ -21,14 +24,20 @@ async function main() {
 
   await Promise.all([
     initializeTVLCacheDB({ isApi2Server: true }),
-    initCache({ cacheType: 'api-server' }),
+    initCache({ cacheType: RUN_TYPE.API_SERVER }),
   ])
 
-  const router = new HyperExpress.Router()
-  const subPath = '/' + process.env.API2_SUBPATH
-  webserver.use(subPath, router)
+  if (skipSubPath) {
+    setTvlRoutes(webserver, '/')
+  } 
+  
+  if (process.env.API2_SUBPATH) {
+    const router = new HyperExpress.Router()
+    const subPath = '/' + process.env.API2_SUBPATH
+    webserver.use(subPath, router)
 
-  setTvlRoutes(router, subPath)
+    setTvlRoutes(router, subPath)
+  }
   webserver.get('/hash', (_req, res) => res.send(process.env.CURRENT_COMMIT_HASH))
 
   webserver.listen(port)
@@ -59,13 +68,3 @@ function shutdown() {
 }
 
 main()
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  // process.exit(1);
-})
-
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception thrown', error);
-  process.exit(1);
-})

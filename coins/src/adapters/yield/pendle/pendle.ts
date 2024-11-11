@@ -6,6 +6,7 @@ import {
   addToDBWritesList,
   getTokenAndRedirectData,
 } from "../../utils/database";
+import PromisePool from "@supercharge/promise-pool";
 
 const customMapping: { [chain: string]: { [key: string]: string } } = {
   arbitrum: {
@@ -16,6 +17,7 @@ const customMapping: { [chain: string]: { [key: string]: string } } = {
   },
 };
 const blacklist = ["0x1d83fdf6f019d0a6b2babc3c6c208224952e42fc"];
+const nullAddress = "0x0000000000000000000000000000000000000000";
 
 export default async function getTokenPrices(
   timestamp: number,
@@ -47,12 +49,12 @@ export default async function getTokenPrices(
     }),
   );
 
-  const markets: string[] = logs
+  const unfilteredMarkets: string[] = logs
     .map((l: any) => l.market)
     .filter((m: string) => !blacklist.includes(m.toLowerCase()));
 
   if (chain == "arbitrum")
-    markets.push(
+    unfilteredMarkets.push(
       ...[
         "0xe11f9786b06438456b044b3e21712228adcaa0d1",
         "0x6f02c88650837c8dfe89f66723c4743e9cf833cd",
@@ -64,43 +66,66 @@ export default async function getTokenPrices(
       ],
     );
   if (chain == "ethereum")
-    markets.push(
+    unfilteredMarkets.push(
       ...[
         "0x1729981345aa5cacdc19ea9eeffea90cf1c6e28b",
         "0xbce250b572955c044c0c4e75b2fa8016c12cabf9",
         "0x17be998a578fd97687b24e83954fec86dc20c979",
         "0xb4460e76d99ecad95030204d3c25fb33c4833997",
         "0x8f7627bd46b30e296aa3aabe1df9bfac10920b6e",
+        "0x6010676bc2534652ad1ef5fa8073dcf9ad7ebfbe",
+        "0x00b321D89A8C36B3929f20B7955080baeD706D1B",
+        "0x7e0f3511044AFdaD9B4fd5C7Fa327cBeB90BEeBf",
       ],
     );
   const tokens: string[][] = await api.multiCall({
-    calls: markets,
+    calls: unfilteredMarkets,
     abi: "function readTokens() view returns (address _SY, address _PT, address _YT)",
   });
 
-  const SYs: string[] = tokens.map((t: any) => t._SY.toLowerCase());
+  const unfilteredSYs: string[] = tokens.map((t: any) => t._SY.toLowerCase());
   const PTs: string[] = tokens.map((t: any) => t._PT.toLowerCase());
-  const yieldTokens: string[] = (
-    await api.multiCall({
-      abi: "function yieldToken() view returns (address )",
-      calls: SYs,
-    })
-  ).map((i: any) => i.toLowerCase());
-  let underlyingTokens: string[] = (
-    await api.multiCall({
-      abi: "function assetInfo() view returns (uint8 asseetType, address assetAddress, uint8 assetDecimals)",
-      calls: SYs,
-    })
-  ).map((i: any) => i.assetAddress.toLowerCase());
+  const unfilteredYieldTokens: string[] = await api.multiCall({
+    abi: "function yieldToken() view returns (address )",
+    calls: unfilteredSYs,
+    permitFailure: true,
+  });
 
-  let underlyingTokenData: CoinData[] = await getTokenAndRedirectData(
-    [...new Set([...yieldTokens, ...underlyingTokens])],
+  const markets: string[] = [];
+  const SYs: string[] = [];
+  const yieldTokens: string[] = [];
+  unfilteredYieldTokens.map((y: string | undefined, i: number) => {
+    if (!y) return;
+    yieldTokens.push(y.toLowerCase());
+    SYs.push(unfilteredSYs[i]);
+    markets.push(unfilteredMarkets[i]);
+  });
+
+  const underlyingTokensMap: { [sy: string]: string } = {};
+  await PromisePool.withConcurrency(10)
+    .for(SYs)
+    .process(async (target) => {
+      const res: any = await api.call({
+        abi: "function assetInfo() view returns (uint8 asseetType, address assetAddress, uint8 assetDecimals)",
+        target,
+      });
+      underlyingTokensMap[target] = res.assetAddress.toLowerCase();
+    });
+  let underlyingTokens: string[] = [];
+  SYs.map((sy) => underlyingTokens.push(underlyingTokensMap[sy]));
+
+  let underlyingTokenDataArray: CoinData[] = await getTokenAndRedirectData(
+    [
+      ...new Set(
+        [...yieldTokens, ...underlyingTokens].filter((t) => t != null),
+      ),
+    ],
     chain,
     timestamp,
   );
 
   if (chain == "arbitrum")
-    underlyingTokenData.push(
+    underlyingTokenDataArray.push(
       ...(await getTokenAndRedirectData(
         [
           "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
@@ -115,10 +140,15 @@ export default async function getTokenPrices(
     underlyingTokens = underlyingTokens.map((t: string) =>
       t in customMapping[chain] ? customMapping[chain][t] : t,
     );
-    underlyingTokenData = underlyingTokenData.filter(
+    underlyingTokenDataArray = underlyingTokenDataArray.filter(
       (u: CoinData) => !(u.address in customMapping[chain]),
     );
   }
+
+  const underlyingTokenData: { [key: string]: CoinData } = {};
+  underlyingTokenDataArray.map((u: CoinData) => {
+    underlyingTokenData[u.address] = u;
+  });
 
   async function syWrites() {
     const [decimals, symbols] = await Promise.all([
@@ -127,9 +157,8 @@ export default async function getTokenPrices(
     ]);
 
     SYs.map((SY: string, i: number) => {
-      const underlying: CoinData | undefined = underlyingTokenData.find(
-        (u: CoinData) => u.address == yieldTokens[i],
-      );
+      const underlying: CoinData | undefined =
+        underlyingTokenData[yieldTokens[i]];
 
       const redirect: string =
         underlying && underlying.redirect
@@ -187,9 +216,9 @@ export default async function getTokenPrices(
     ]);
 
     PTs.map((PT: string, i: number) => {
-      const underlying: CoinData | undefined = underlyingTokenData.find(
-        (u: CoinData) => u.address == underlyingTokens[i],
-      );
+      if (underlyingTokens[i] == nullAddress) return;
+      const underlying: CoinData | undefined =
+        underlyingTokenData[underlyingTokens[i]];
 
       if (
         !underlying ||
@@ -230,9 +259,10 @@ export default async function getTokenPrices(
     ]);
 
     YTs.map((YT: string, i: number) => {
-      const underlying: CoinData | undefined = underlyingTokenData.find(
-        (u: CoinData) => u.address == underlyingTokens[i],
-      );
+      if (underlyingTokens[i] == nullAddress) return;
+
+      const underlying: CoinData | undefined =
+        underlyingTokenData[underlyingTokens[i]];
       const PT: Write | undefined = writes.find((u: Write) =>
         u.PK.includes(PTs[i]),
       );
@@ -293,15 +323,16 @@ export default async function getTokenPrices(
 
     markets.map((m: string, i: number) => {
       if (!m || !PTs[i] || !SYs[i]) return;
-      const underlying: CoinData | undefined = underlyingTokenData.find(
-        (u: CoinData) =>
-          u.address == yieldTokens[i] || u.address == underlyingTokens[i],
-      );
+      const underlying: CoinData | undefined =
+        underlyingTokenData[yieldTokens[i]] ??
+        underlyingTokenData[underlyingTokens[i]];
+
       if (
         !underlying ||
         !exchangeRates[markets[i]] ||
         !decimals[i] ||
-        !symbols[i]
+        !symbols[i] ||
+        underlying.address == nullAddress
       )
         return;
 

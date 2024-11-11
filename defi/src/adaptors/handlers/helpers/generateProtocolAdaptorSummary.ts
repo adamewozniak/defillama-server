@@ -39,12 +39,12 @@ export default async (adapter: ProtocolAdaptor, adaptorRecordType: AdaptorRecord
     try {
         // Get all records from db
         const timestamp = getUniqStartOfTodayTimestamp(new Date()) - ONE_DAY_IN_SECONDS
-        let adaptorRecordsRaw = await getAdaptorRecord({ adaptorType, adapter, type: adaptorRecordType, mode: 'ALL', })
+        let adaptorRecordsRaw = await getAdaptorRecord({ adaptorType, adapter, type: adaptorRecordType, mode: 'ALL', timestamp: timestamp })
         const rawTotalRecord = ACCOMULATIVE_ADAPTOR_TYPE[adaptorRecordType]
             ? await getAdaptorRecord({ adaptorType, adapter, type: ACCOMULATIVE_ADAPTOR_TYPE[adaptorRecordType], mode: "LAST" }).catch(_e => { }) as AdaptorRecord | undefined
             : undefined
         let protocolsKeys = [adapter.module]
-        if (adapter?.enabled && adapter.versionKey) {
+        if ((adapter?.enabled || adapter.enabled === undefined) && adapter.versionKey) {
             protocolsKeys = [adapter.versionKey]
         }
         const chainFilterArray = chainFilter ? [chainFilter] : undefined
